@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Html5QrcodeScanner } from "html5-qrcode";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,41 @@ interface QRScannerProps {
 const QRScanner = ({ onScan }: QRScannerProps) => {
   const [manualCode, setManualCode] = useState("");
   const [useManual, setUseManual] = useState(false);
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+
+  useEffect(() => {
+    if (!useManual) {
+      // Initialize scanner
+      const scanner = new Html5QrcodeScanner(
+        "qr-reader",
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+        },
+        false
+      );
+
+      scanner.render(
+        (decodedText) => {
+          // Success callback
+          onScan(decodedText.trim().toUpperCase());
+          scanner.clear();
+        },
+        (error) => {
+          // Error callback - silent, no need to log every frame
+        }
+      );
+
+      scannerRef.current = scanner;
+
+      return () => {
+        if (scannerRef.current) {
+          scannerRef.current.clear().catch(console.error);
+        }
+      };
+    }
+  }, [useManual, onScan]);
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,14 +75,7 @@ const QRScanner = ({ onScan }: QRScannerProps) => {
         <CardContent className="space-y-6">
           {!useManual ? (
             <div className="space-y-4">
-              <div className="aspect-square bg-muted rounded-lg flex items-center justify-center border-2 border-dashed">
-                <div className="text-center space-y-2">
-                  <Camera className="w-12 h-12 mx-auto text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    Camera scanning coming soon
-                  </p>
-                </div>
-              </div>
+              <div id="qr-reader" className="rounded-lg overflow-hidden"></div>
               <Button
                 variant="outline"
                 className="w-full"
