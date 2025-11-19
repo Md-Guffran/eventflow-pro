@@ -1,5 +1,8 @@
--- Create enum for attendee types
-CREATE TYPE public.attendee_type AS ENUM ('alumni', 'faculty', 'volunteer', 'other');
+-- Consolidated Schema Migration
+-- This migration combines the initial setup with the final attendee_type enum
+
+-- Create enum for attendee types (final version with student and press)
+CREATE TYPE public.attendee_type AS ENUM ('alumni', 'faculty', 'volunteer', 'student', 'press');
 
 -- Create enum for app roles
 CREATE TYPE public.app_role AS ENUM ('admin', 'volunteer');
@@ -170,10 +173,12 @@ CREATE INDEX idx_attendees_attendee_id ON public.attendees(attendee_id);
 CREATE INDEX idx_activity_log_attendee_id ON public.activity_log(attendee_id);
 CREATE INDEX idx_activity_log_timestamp ON public.activity_log(timestamp);
 
--- Function to generate next attendee ID
+-- Function to generate next attendee ID (final version with all types)
 CREATE OR REPLACE FUNCTION public.get_next_attendee_id(attendee_type TEXT)
 RETURNS TEXT
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   prefix TEXT;
@@ -185,7 +190,8 @@ BEGIN
     WHEN 'alumni' THEN prefix := 'AL';
     WHEN 'faculty' THEN prefix := 'FL';
     WHEN 'volunteer' THEN prefix := 'VL';
-    WHEN 'other' THEN prefix := 'OT';
+    WHEN 'student' THEN prefix := 'STU';
+    WHEN 'press' THEN prefix := 'PR';
     ELSE RAISE EXCEPTION 'Invalid attendee type';
   END CASE;
   
@@ -195,7 +201,7 @@ BEGIN
   FROM public.attendees
   WHERE attendee_id LIKE prefix || '-%';
   
-  -- Format as XXX-000
+  -- Format as XXX-000 (or XXXX-000 for STU)
   new_id := prefix || '-' || LPAD(next_num::TEXT, 3, '0');
   
   RETURN new_id;

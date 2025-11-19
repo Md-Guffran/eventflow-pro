@@ -115,24 +115,59 @@ const AttendeeProfile = ({ attendee: initialAttendee, onBack }: AttendeeProfileP
     }
   };
 
+  const getNormalizedAttendeeType = (type: string): string => {
+    if (!type) return '';
+    const lowerType = type.toLowerCase();
+    const typeMap: Record<string, string> = {
+      'al': 'alumni',
+      'fl': 'faculty',
+      'vl': 'volunteer',
+      'stu': 'student',
+      'pr': 'press',
+    };
+    return typeMap[lowerType] || lowerType;
+  }
+
+  const getAvailableActions = (attendeeType: string, day: number) => {
+    const normalizedType = getNormalizedAttendeeType(attendeeType);
+    const fullAccessTypes = ['alumni', 'faculty'];
+    const limitedAccessTypes = ['volunteer', 'student', 'press'];
+    
+    if (fullAccessTypes.includes(normalizedType)) {
+      const actions = ['entrance', 'lunch', 'kit'];
+      if (day === 1) {
+        actions.push('dinner');
+      }
+      return actions;
+    } else if (limitedAccessTypes.includes(normalizedType)) {
+      return ['entrance', 'lunch'];
+    }
+    
+    return [];
+  };
+  
   const getTypeLabel = (type: string) => {
+    const normalizedType = getNormalizedAttendeeType(type);
     const labels: Record<string, string> = {
       alumni: "Alumni",
-      faculty: "Faculty",
+      faculty: "Faculty", 
       volunteer: "Volunteer",
-      other: "Others",
+      student: "Student",
+      press: "Press",
     };
-    return labels[type] || type;
+    return labels[normalizedType] || normalizedType;
   };
-
+  
   const getTypeBadgeVariant = (type: string) => {
+    const normalizedType = getNormalizedAttendeeType(type);
     const variants: Record<string, any> = {
       alumni: "default",
-      faculty: "secondary",
+      faculty: "secondary", 
       volunteer: "outline",
-      other: "destructive",
+      student: "destructive",
+      press: "warning",
     };
-    return variants[type] || "default";
+    return variants[normalizedType] || "default";
   };
 
   const ActionButton = ({ action, day, label }: any) => {
@@ -181,8 +216,8 @@ const AttendeeProfile = ({ attendee: initialAttendee, onBack }: AttendeeProfileP
             </Badge>
           </div>
           <div className="flex items-center gap-4 pt-2">
-            <Badge variant="outline" className="font-mono">
-              {attendee.attendee_id}
+            <Badge variant="secondary" className="font-mono">
+              {attendee.qr_code}
             </Badge>
             <span className="text-sm text-muted-foreground">{attendee.phone}</span>
           </div>
@@ -201,10 +236,14 @@ const AttendeeProfile = ({ attendee: initialAttendee, onBack }: AttendeeProfileP
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <ActionButton action="entrance" day={1} label="Entrance" />
-            <ActionButton action="lunch" day={1} label="Lunch" />
-            <ActionButton action="dinner" day={1} label="Dinner" />
-            <ActionButton action="kit" day={1} label="Kit" />
+            {getAvailableActions(attendee.type, 1).map((action) => (
+              <ActionButton
+                key={action}
+                action={action}
+                day={1}
+                label={action.charAt(0).toUpperCase() + action.slice(1)}
+              />
+            ))}
           </CardContent>
         </Card>
 
@@ -219,13 +258,27 @@ const AttendeeProfile = ({ attendee: initialAttendee, onBack }: AttendeeProfileP
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <ActionButton action="entrance" day={2} label="Entrance" />
-            <ActionButton action="lunch" day={2} label="Lunch" />
-            {!attendee.day1_kit && <ActionButton action="kit" day={2} label="Kit" />}
-            {attendee.day1_kit && (
-              <div className="text-sm text-muted-foreground text-center py-2 border rounded-lg">
-                Kit already taken on Day 1
-              </div>
+            {getAvailableActions(attendee.type, 2)
+              .filter((action) => action !== "kit")
+              .map((action) => (
+                <ActionButton
+                  key={action}
+                  action={action}
+                  day={2}
+                  label={action.charAt(0).toUpperCase() + action.slice(1)}
+                />
+              ))}
+            {getAvailableActions(attendee.type, 2).includes("kit") && (
+              <>
+                {!attendee.day1_kit && (
+                  <ActionButton action="kit" day={2} label="Kit" />
+                )}
+                {attendee.day1_kit && (
+                  <div className="text-sm text-muted-foreground text-center py-2 border rounded-lg">
+                    Kit already taken on Day 1
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

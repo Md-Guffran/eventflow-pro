@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,18 +10,26 @@ import { toast } from "sonner";
 
 interface RegistrationFormProps {
   qrCode: string;
+  attendeeType: string | null;
   onBack: () => void;
   onComplete: () => void;
 }
 
-const RegistrationForm = ({ qrCode, onBack, onComplete }: RegistrationFormProps) => {
+const RegistrationForm = ({ qrCode, attendeeType, onBack, onComplete }: RegistrationFormProps) => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     phone: "",
-    type: "alumni" as "alumni" | "faculty" | "volunteer" | "other",
+    type: (attendeeType || "alumni") as "alumni" | "faculty" | "volunteer" | "student" | "press",
   });
+  
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (attendeeType) {
+      setFormData(prev => ({ ...prev, type: attendeeType as any }));
+    }
+  }, [attendeeType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,7 +137,8 @@ const RegistrationForm = ({ qrCode, onBack, onComplete }: RegistrationFormProps)
                   <SelectItem value="alumni">Alumni (AL-XXX)</SelectItem>
                   <SelectItem value="faculty">Faculty (FL-XXX)</SelectItem>
                   <SelectItem value="volunteer">Volunteer (VL-XXX)</SelectItem>
-                  <SelectItem value="other">Others (OT-XXX)</SelectItem>
+                  <SelectItem value="student">Student (STU-XXX)</SelectItem>
+                  <SelectItem value="press">Press (PR-XXX)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

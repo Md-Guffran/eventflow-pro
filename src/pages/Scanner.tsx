@@ -18,6 +18,7 @@ const Scanner = () => {
   const [attendeeData, setAttendeeData] = useState<any>(null);
   const [showRegistration, setShowRegistration] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [attendeeType, setAttendeeType] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -57,6 +58,31 @@ const Scanner = () => {
     setScannedQR(qrCode);
     setLoading(true);
 
+    const qrPrefix = qrCode.split('-')[0].toUpperCase();
+    let attendeeTypeFromQR: string | null = null;
+
+    switch (qrPrefix) {
+      case 'AL':
+        attendeeTypeFromQR = 'alumni';
+        break;
+      case 'FL':
+        attendeeTypeFromQR = 'faculty';
+        break;
+      case 'STU':
+        attendeeTypeFromQR = 'student';
+        break;
+      case 'PR':
+        attendeeTypeFromQR = 'press';
+        break;
+      case 'VL':
+        attendeeTypeFromQR = 'volunteer';
+        break;
+      default:
+        break;
+    }
+    
+    setAttendeeType(attendeeTypeFromQR);
+
     try {
       const { data, error } = await supabase
         .from("attendees")
@@ -84,6 +110,7 @@ const Scanner = () => {
     setScannedQR(null);
     setAttendeeData(null);
     setShowRegistration(false);
+    setAttendeeType(null);
   };
 
   const handleRegistrationComplete = () => {
@@ -144,6 +171,7 @@ const Scanner = () => {
         ) : showRegistration ? (
           <RegistrationForm
             qrCode={scannedQR}
+            attendeeType={attendeeType}
             onBack={handleBackToScanner}
             onComplete={handleRegistrationComplete}
           />
