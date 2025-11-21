@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+
+// Create a new Supabase client with the service_role key
+const supabaseAdmin = createClient(
+  import.meta.env.VITE_SUPABASE_URL!,
+  import.meta.env.VITE_SUPABASE_SERVICE_KEY!
+);
 
 interface RegistrationFormProps {
   qrCode: string;
@@ -36,24 +43,18 @@ const RegistrationForm = ({ qrCode, attendeeType, onBack, onComplete }: Registra
     setLoading(true);
 
     try {
-      // Get next attendee ID
-      const { data: attendeeId, error: idError } = await supabase
-        .rpc("get_next_attendee_id", { attendee_type: formData.type });
+      const attendeeId = qrCode; // Use the scanned QR code as the attendee ID
 
-      if (idError) throw idError;
-
-      // Create attendee
-      const { error: insertError } = await supabase
-        .from("attendees")
-        .insert({
-          attendee_id: attendeeId,
-          type: formData.type,
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          qr_code: qrCode,
-          assigned: true,
-        });
+      // Create attendee using the admin client
+      const { error: insertError } = await supabaseAdmin.from("attendees").insert({
+        attendee_id: attendeeId,
+        type: formData.type,
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        qr_code: qrCode,
+        assigned: true,
+      });
 
       if (insertError) throw insertError;
 

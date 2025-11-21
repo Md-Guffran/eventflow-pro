@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { RefreshCw } from "lucide-react";
 
 type Attendee = {
   id: string;
@@ -34,13 +35,21 @@ type Attendee = {
   vl_day_2: boolean;
 };
 
+type Activity = {
+  id: number;
+  timestamp: string;
+  activity: string;
+  attendees: { name: string } | null;
+};
+
 const Dashboard = () => {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // Add the getTypeLabel function inside the component
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
       alumni: "Alumni",
@@ -52,20 +61,45 @@ const Dashboard = () => {
     return labels[type] || type;
   };
 
+  const fetchAttendees = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("attendees").select("*");
+    if (error) {
+      toast.error("Error fetching attendees.");
+      console.error("Error fetching attendees:", error);
+    } else {
+      setAttendees(data as unknown as Attendee[]);
+    }
+    setLoading(false);
+  }, []);
+
+  const fetchActivities = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("activity_log")
+      .select("id, timestamp, activity, attendees(name)")
+      .order("timestamp", { ascending: false })
+      .limit(10);
+
+    if (error) {
+      toast.error("Error fetching activities.");
+      console.error("Error fetching activities:", error);
+    } else {
+      setActivities(data as unknown as Activity[]);
+    }
+  }, []);
+
   useEffect(() => {
     const checkAdminAccess = async () => {
-      // Check for admin session in localStorage
       const adminSession = localStorage.getItem('adminSession');
       const adminSessionExpiry = localStorage.getItem('adminSessionExpiry');
       
-      // Check if admin session exists and is not expired
       if (adminSession === 'true' && adminSessionExpiry && Date.now() < parseInt(adminSessionExpiry)) {
         setIsAdmin(true);
         fetchAttendees();
+        fetchActivities();
         return;
       }
       
-      // If no valid admin session, check Supabase user
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user || user.email !== import.meta.env.VITE_ADMIN_EMAIL) {
@@ -76,20 +110,41 @@ const Dashboard = () => {
       
       setIsAdmin(true);
       fetchAttendees();
+      fetchActivities();
     };
   
     checkAdminAccess();
-  }, [navigate]);
 
-  const fetchAttendees = async () => {
-    const { data, error } = await supabase.from("attendees").select("*");
-    if (error) {
-      toast.error("Error fetching attendees.");
-      console.error("Error fetching attendees:", error);
-    } else {
-      setAttendees(data as unknown as Attendee[]);
-    }
-  };
+    const attendeesChannel = supabase
+      .channel('attendees-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendees' },
+        (payload) => {
+          console.log('Change received!', payload);
+          toast.info("Attendee data changed, refreshing...");
+          fetchAttendees();
+        }
+      )
+      .subscribe();
+
+    const activityChannel = supabase
+      .channel('activity-log-db-changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'activity_log' },
+        () => {
+          toast.info('New activity detected, refreshing feed.');
+          fetchActivities();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(attendeesChannel);
+      supabase.removeChannel(activityChannel);
+    };
+  }, [navigate, fetchAttendees, fetchActivities]);
 
   const filteredAttendees = useMemo(() => {
     return attendees.filter(
@@ -120,7 +175,6 @@ const Dashboard = () => {
     return { total, checkedIn, kitPickedUp, lunchDay1, lunchDay2, dinnerDay1, dinnerDay2, students, press };
   }, [attendees]);
 
-  // Don't render anything if not admin
   if (!isAdmin) {
     return null;
   }
@@ -136,6 +190,10 @@ const Dashboard = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-64"
           />
+          <Button onClick={fetchAttendees} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
           <Button onClick={exportToExcel}>Export to Excel</Button>
         </div>
       </header>
@@ -215,50 +273,74 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Entrance</TableHead>
-              <TableHead>Kit</TableHead>
-              <TableHead>Lunch D1</TableHead>
-              <TableHead>Lunch D2</TableHead>
-              <TableHead>Dinner D1</TableHead>
-              <TableHead>Dinner D2</TableHead>
-              <TableHead>AL D1</TableHead>
-              <TableHead>AL D2</TableHead>
-              <TableHead>FL D1</TableHead>
-              <TableHead>FL D2</TableHead>
-              <TableHead>VL D1</TableHead>
-              <TableHead>VL D2</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredAttendees.map((attendee) => (
-              <TableRow key={attendee.id}>
-                <TableCell>{attendee.name}</TableCell>
-                <TableCell>{attendee.email}</TableCell>
-                <TableCell>{getTypeLabel(attendee.type)}</TableCell>
-                <TableCell>{attendee.entrance ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.kit ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.lunch_day_1 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.lunch_day_2 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.dinner_day_1 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.dinner_day_2 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.al_day_1 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.al_day_2 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.fl_day_1 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.fl_day_2 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.vl_day_1 ? "✅" : "❌"}</TableCell>
-                <TableCell>{attendee.vl_day_2 ? "✅" : "❌"}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Type</TableHead>
+                  {/* <TableHead>Entrance</TableHead>
+                  <TableHead>Kit</TableHead>
+                  <TableHead>Lunch D1</TableHead>
+                  <TableHead>Lunch D2</TableHead>
+                  <TableHead>Dinner D1</TableHead>
+                  <TableHead>Dinner D2</TableHead> */}
+                  {/* <TableHead>AL D1</TableHead>
+                  <TableHead>AL D2</TableHead>
+                  <TableHead>FL D1</TableHead>
+                  <TableHead>FL D2</TableHead>
+                  <TableHead>VL D1</TableHead>
+                  <TableHead>VL D2</TableHead> */}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredAttendees.map((attendee) => (
+                  <TableRow key={attendee.id}>
+                    <TableCell>{attendee.name}</TableCell>
+                    <TableCell>{attendee.email}</TableCell>
+                    <TableCell>{getTypeLabel(attendee.type)}</TableCell>
+                    {/* <TableCell>{attendee.entrance ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.kit ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.lunch_day_1 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.lunch_day_2 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.dinner_day_1 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.dinner_day_2 ? "✅" : "❌"}</TableCell> */}
+                    {/* <TableCell>{attendee.al_day_1 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.al_day_2 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.fl_day_1 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.fl_day_2 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.vl_day_1 ? "✅" : "❌"}</TableCell>
+                    <TableCell>{attendee.vl_day_2 ? "✅" : "❌"}</TableCell> */}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </div>
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Activity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-4">
+                {activities.map((activity) => (
+                  <li key={activity.id} className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium">{activity.attendees?.name || 'Unknown Attendee'}</p>
+                      <p className="text-sm text-muted-foreground">{activity.activity.replace(/_/g, ' ')}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{new Date(activity.timestamp).toLocaleTimeString()}</p>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };
