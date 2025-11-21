@@ -7,7 +7,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Scanner from "./pages/Scanner";
 import Admin from "./pages/Admin";
-import Dashboard from "./pages/Dashboard";
+import Dashboard from "./pages/dashboard"; // Changed from Dashboard to dashboard
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
