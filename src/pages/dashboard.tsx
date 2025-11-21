@@ -115,7 +115,9 @@ const Dashboard = () => {
     const lunchDay2 = attendees.filter((a) => a.lunch_day_2).length;
     const dinnerDay1 = attendees.filter((a) => a.dinner_day_1).length;
     const dinnerDay2 = attendees.filter((a) => a.dinner_day_2).length;
-    return { total, checkedIn, kitPickedUp, lunchDay1, lunchDay2, dinnerDay1, dinnerDay2 };
+    const students = attendees.filter((a) => a.type === 'student').length;
+    const press = attendees.filter((a) => a.type === 'press').length;
+    return { total, checkedIn, kitPickedUp, lunchDay1, lunchDay2, dinnerDay1, dinnerDay2, students, press };
   }, [attendees]);
 
   // Don't render anything if not admin
@@ -138,7 +140,7 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-4 mb-6">
         <Card>
           <CardHeader>
             <CardTitle>Total Attendees</CardTitle>
@@ -161,6 +163,22 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{stats.kitPickedUp}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Students</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{stats.students}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Press</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{stats.press}</p>
           </CardContent>
         </Card>
         <Card>
